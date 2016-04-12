@@ -6,7 +6,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/3, helloPort/0, emigrant/1, getDestination/1, close/0]).
+-export([start_link/3, helloPort/0, emigrant/1, getDestination/1, close/0, update_count/1]).
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
@@ -29,6 +29,10 @@ helloPort() ->
 -spec emigrant({tuple(),tuple()}) -> ok.
 emigrant(AgentInfo) ->
     gen_server:cast(whereis(?MODULE),{emigrant,self(),AgentInfo}).
+
+-spec update_count(NewCount :: integer()) -> ok.
+update_count(NewCount) ->
+    gen_server:cast(whereis(?MODULE), {update_island_count, NewCount}).
 
 -spec close() -> ok.
 close() ->
@@ -88,6 +92,9 @@ handle_cast({helloPort,Pid}, St) ->
             nothing
     end,
     {noreply, St#state{ports = [Pid|St#state.ports]}};
+
+handle_cast({update_island_count, IslandCount}, St) ->
+  {noreply, St#state{n = IslandCount}};
 
 handle_cast(close, State) ->
     {stop, normal, State}.

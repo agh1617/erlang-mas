@@ -26,6 +26,7 @@
 %% ====================================================================
 -spec start(Time::pos_integer(), sim_params(), config()) -> [agent()].
 start(Time, SP, Cf) ->
+    mas_hybrid_supervisor:start(),
     {ok, _} = gen_server:start({local, ?MODULE}, ?MODULE, [Time, SP, Cf], []),
     register(?RESULT_SINK, self()),
     Islands = [receive_results() || _ <- lists:seq(1, Cf#config.islands)],
@@ -53,6 +54,9 @@ init([Time, SP, Cf = #config{islands = Islands}]) ->
     timer:send_after(Time, theEnd),
     Pids = [spawn_link(mas_hybrid_island, start, [SP, Cf])
             || _ <- lists:seq(1, Islands)],
+
+    mas_hybrid_supervisor:register(Pids),
+
     mas_topology:start_link(self(), Islands, Cf#config.topology),
     mas_misc_util:initialize_subscriptions(Pids, Cf),
     {ok, #state{pids = Pids,
@@ -81,7 +85,11 @@ handle_cast({agent, From, Agent}, St = #state{pids = Pids}) ->
     IslandFrom = mas_misc_util:find(From, Pids),
     IslandTo = mas_topology:getDestination(IslandFrom),
     mas_hybrid_island:sendAgent(lists:nth(IslandTo, Pids), Agent),
-    {noreply, St}.
+    {noreply, St};
+
+handle_cast({new_islands, NewIslandPids}, St = #state{pids = Pids}) ->
+    mas_topology:update_count(length(NewIslandPids) + length(Pids)),
+    {noreply, St#state{pids = [Pids | NewIslandPids]}}.
 
 -spec handle_info(Info :: timeout() | term(), State :: state())
                  -> {noreply, NewState :: state()} |
